@@ -57,8 +57,6 @@ def mainPage()	{
 		if (!childWasCreated)	{
 			section		{
 				label title: "Room name:", defaultValue: app.label, required: true
-                //label(name: "labelRequired", title: "required:true", required: true, multiple: false)
-                //input name: "theRoomName", type: "text", title: "Room name:", required: true
 			}
     	} else {
 			section		{
@@ -75,7 +73,7 @@ def mainPage()	{
 		section("Turn on switches when someone might be inside the room?")		{
  			input "switches", "capability.switch", title: "Which switch(es)?", required: false, multiple: true
 		}
-		section("Time (in seconds) to revert back to Vacant when motion is not detected")		{
+		section("Revert back to Vacant when motion is not detected?")		{
         	timeoutInputs()
 		}
 		section("Turn off switches when room is vacant?")		{
@@ -98,10 +96,8 @@ def timeoutInputs() {
 
 def installed()		{
 	log.debug "Installed app ${app.label} with settings: ${settings}"
-    //app.updateLabel(app.name)
     log.debug "app label: ${app.label}"
     log.debug "app name: ${app.name}"
-    //initialize()
 }
 
 def updated()	{
@@ -147,14 +143,44 @@ private getRoomState() {
 private setRoomState(state) {
 	def roomDevice = getChildDevice(getRoomDeviceId())
     def oldState = roomDevice.getRoomState()
+    if (oldState == "kaput") {
+    	log.info "Not changing room state to ${state} because room is not in service"
+        return
+    }
+    
     if (state != oldState) {
-    	log.debug "Changing state: ${oldState} => ${state}"
+    	log.info "Changing room state: ${oldState} => ${state}"
     	
         if (oldState == 'vacant') {
     		switchesOn()
     	}
         roomDevice.generateEvent(state)
+        updateTimeout()
     }
+}
+
+def makeRoomVacant()	{
+	log.debug "Making room vacant."
+    setRoomState('vacant')
+	switchesOff()
+}
+
+def makeRoomReserved()	{
+	log.debug "Making room reserved."
+    setRoomState('reserved')
+	switchesOn()
+}
+
+def makeRoomOccupied()	{
+	log.debug "Making room occupied."
+    setRoomState('occupied')
+	switchesOn()
+}
+
+def makeRoomEngaged()	{
+	log.debug "Making room engaged."
+    setRoomState('engaged')
+	switchesOn()
 }
 
 private outerPerimeterBreached() {
@@ -199,7 +225,7 @@ def getEngagementTimeOutInSecondsAsInteger() {
 	return 30
 }
 
-def checkRoomActivation()	{
+def updateTimeout()	{
 	log.debug "Checking room activation ..."
     if (!roomActive()) {
     	log.debug "room is not active"
@@ -221,7 +247,7 @@ def checkRoomActivation()	{
         }
         
         if (timeOutInSec > 0) {
-        	log.debug "Vacating room in ${timeOutInSec} seconds"
+        	log.debug "Resetting time out to ${timeOutInSec} seconds"
         	runIn(timeOutInSec, makeRoomVacant)
         }
     }
@@ -232,34 +258,32 @@ def checkRoomActivation()	{
 
 def	insideMotionActiveEventHandler(evt)	{
 	log.debug "inside motion: active"
-
+	log.debug "Cancelled time out"
     unschedule()   
 
-    if (innerPerimeterBreached()) {
-    	setRoomState(outerPerimeterBreached() ? "reserved" : "occupied")
+	if (innerPerimeterBreached()) {
+    	if (outerPerimeterBreached())
+        	makeRoomReserved()
+        else
+        	makeRoomOccupied()
     }
     else {
-    	setRoomState("engaged")
+    	makeRoomEngaged()
     }
 }
 
 def	insideMotionInactiveEventHandler(evt)	{
 	log.debug "inside motion: inactive"    
-    checkRoomActivation()
+    updateTimeout()
 }
 
 def	perimeterContactOpenEventHandler(evt)	{
 	log.debug "perimeter contact: open"
 	log.debug "inner perimeter has been breached"
-    
-    if (outerPerimeterBreached()) {
-    	setRoomState("reserved")
-    }
-    else {
-    	setRoomState("occupied")
-    }
-    
-    checkRoomActivation()
+    if (outerPerimeterBreached())
+    	makeRoomReserved()
+    else 
+    	makeRoomOccupied()
 }
 
 def	perimeterContactClosedEventHandler(evt)	{
@@ -280,8 +304,7 @@ def	outsideMotionActiveEventHandler(evt)	{
     
     def state = getRoomState()
     if (state == "occupied") {
-    	setRoomState("reserved")
-        checkRoomActivation()
+    	makeRoomReserved()
     }
 }
 
@@ -291,35 +314,27 @@ def	outsideMotionInactiveEventHandler(evt)	{
 	def outerPerimeterBreached = outerPerimeterBreached()
     if (outerPerimeterBreached) {
     	log.debug "outer perimeter is still breached"
+        return
     } 
     else  {
     	log.debug "outer perimeter is restored"
     }
     
-    if (!outerPerimeterBreached && roomActive() && getRoomState() == "reserved") {
-    	setRoomState("occupied")
-        checkRoomActivation()
+    if (getRoomState() == "engaged" || !roomActive()) {
+    	//nothing to do
+    	return
     }
+
+    if (innerPerimeterBreached()) 
+    	makeRoomOccupied()
+    else 
+    	makeRoomEngaged()
 }
 
 def	modeEventHandler(evt)	{
-	//if (awayModes && awayModes.contains(evt.value))
-    //	makeRoomVacant()
-}
-
-def makeRoomVacant()	{
-	log.debug "Making room vacant."
-    setRoomState('vacant')
-	switchesOff()
-        
-	//def state = getRoomState()
-	//if (['occupied', 'checking'].contains(state))	{
-	//	setRoomState('vacant')
-	//	switchesOff()
-	//}
-    
-    //def roomState = getRoomState()
-    //log.debug "room state: ${roomState}"
+	if (awayModes && awayModes.contains(evt.value)) {
+    	makeRoomVacant()
+    }
 }
 
 def uninstalled() {
@@ -338,7 +353,7 @@ def spawnChildDevice(roomName)	{
 
 def handleSwitches(oldState = null, state = null)	{
 	if (state && oldState != state)	{
-		if (state == 'occupied')
+    	if (['reserved', 'occupied', 'engaged'].contains(state))
 			switchesOn()
 		else
 			if (state == 'vacant')
