@@ -58,8 +58,8 @@ def updated()		{
 }
 
 def initialize()	{
-	log.info "rooms manager: there are ${childApps.size()} rooms."
+	log.info "There are ${childApps.size()} rooms."
 	childApps.each	{ child ->
-		log.info "room manager: room: ${child.label}"
+		log.info "Room: ${child.label}"
 	}
 }
