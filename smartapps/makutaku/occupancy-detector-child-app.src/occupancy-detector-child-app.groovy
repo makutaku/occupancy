@@ -57,6 +57,8 @@ def mainPage()	{
 		if (!childWasCreated)	{
 			section		{
 				label title: "Room name:", defaultValue: app.label, required: true
+                //label(name: "labelRequired", title: "required:true", required: true, multiple: false)
+                //input name: "theRoomName", type: "text", title: "Room name:", required: true
 			}
     	} else {
 			section		{
@@ -95,19 +97,23 @@ def timeoutInputs() {
 }
 
 def installed()		{
-	log.debug "Installed with settings: ${settings}"
-    app.updateLabel(settings.label)
-    initialize()
+	log.debug "Installed app ${app.label} with settings: ${settings}"
+    //app.updateLabel(app.name)
+    log.debug "app label: ${app.label}"
+    log.debug "app name: ${app.name}"
+    //initialize()
 }
 
 def updated()	{
-	log.debug "Updated with settings: ${settings}"
+	log.debug "Updated app ${app.label} with settings: ${settings}"
+    log.debug "app label: ${app.label}"
+    log.debug "app name: ${app.name}"
     unschedule()
     initialize()
 }
 
 def	initialize()	{
-	log.debug "Initializing ..."
+	log.debug "Initializing app ${app.label} ..."
 	if (!childCreated())	{
 		spawnChildDevice(app.label)
 	}
@@ -176,14 +182,14 @@ def getReservationTimeOutInSecondsAsInteger() {
 	if (reservationTimeOutInSeconds != null) {
     	return reservationTimeOutInSeconds.toInteger()
     }
-	return 10
+	return 30
 }
 
 def getOccupationTimeOutInSecondsAsInteger() {
 	if (occupationTimeOutInSeconds != null) {
     	return occupationTimeOutInSeconds.toInteger()
     }
-	return 20
+	return 30
 }
 
 def getEngagementTimeOutInSecondsAsInteger() {

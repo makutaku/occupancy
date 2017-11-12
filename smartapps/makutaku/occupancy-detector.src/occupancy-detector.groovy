@@ -17,16 +17,7 @@
 *
 *  Name: Occupancy Detector
 *  Source: https://github.com/adey/bangali/blob/master/smartapps/bangali/rooms-manager.src/rooms-manager.groovy
-*  Version: 0.02
-*
-*  DONE:
-*   1) added support for multiple away modes. when home changes to any these modes room is set to vacant but
-*            only if room is in occupied or checking state.
-*   2) added subscription for motion devices so if room is vacant or checking move room state to occupied.
-*   3) added support for switches to be turned on when room is changed to occupied.
-*   4) added support for switches to be turned off when room is changed to vacant, different switches from #3.
-*   5) added button push events to tile commands, where occupied = button 1, ..., kaput = button 6 so it is
-*            supported by ST Smart Lighting smartapp.
+*  Version: 0.01
 *
 *****************************************************************************************************************/
 
@@ -34,7 +25,7 @@ definition (
     name: "Occupancy Detector",
     namespace: "makutaku",
     author: "makutaku",
-    description: "Detect if someone might be using a room, even when the person stops moving in it.",
+    description: "Detect if someone might be using a room, even when the person stops moving inside.",
     category: "My Apps",
     singleInstance: true,
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
@@ -43,7 +34,7 @@ definition (
 )
 
 preferences	{
-	page(name: "mainPage", title: "Installed Rooms", install: true, uninstall: true, submitOnChange: true) {
+	page(name: "mainPage", title: "Installed Rooms", install: true, uninstall: true) {
 		section {
             app(name: "Occupancy Detector", appName: "Occupancy Detector Child App", namespace: "makutaku", title: "New room", multiple: true)
 		}
