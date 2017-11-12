@@ -15,18 +15,7 @@
 *  You should have received a copy of the GNU General Public License along with this program.
 *  If not, see <http://www.gnu.org/licenses/>.
 *
-*  Name: Room Child App
-*  Source: https://github.com/adey/bangali/blob/master/smartapps/bangali/rooms-child-app.src/rooms-child-app.groovy
-*  Version: 0.02
-*
-*   DONE:
-*   1) added support for multiple away modes. when home changes to any these modes room is set to vacant but
-*            only if room is in occupied or checking state.
-*   2) added subscription for motion devices so if room is vacant or checking move room state to occupied.
-*   3) added support for switches to be turned on when room is changed to occupied.
-*   4) added support for switches to be turned off when room is changed to vacant, different switches from #3.
-*   5) added button push events to tile commands, where occupied = button 1, ..., kaput = button 6 so it is
-*            supported by ST Smart Lighting smartapp.
+*  Version: 0.01
 *
 *****************************************************************************************************************/
 
@@ -46,11 +35,28 @@ preferences {
 	page(name: "mainPage")
 }
 
+private getRoomDeviceId()	{	
+	return "rm_${app.id}"	
+}
+
+private childCreated()		{
+	if (getChildDevice(getRoomDeviceId()))
+		return true
+	else
+		return false
+}
+
 def mainPage()	{
-	dynamicPage(name: "mainPage", title: "Configure Occupancy Detection", install: true, uninstall: childCreated())		{
-		if (!childCreated())	{
+
+	def childWasCreated = childCreated()
+	
+	dynamicPage(name: "mainPage", 
+    	title: "Adding a room", 
+        install: true, uninstall: childWasCreated)	{
+        
+		if (!childWasCreated)	{
 			section		{
-				label title: "Room name:", required: true
+				label title: "Room name:", defaultValue: app.label, required: true
 			}
     	} else {
 			section		{
@@ -61,18 +67,14 @@ def mainPage()	{
 		section("Update room state on away mode?")		{
  			input "awayModes", "mode", title: "Away mode(s)?", required: false, multiple: true
 		}
-		section("Which sensors will be used to detect if someone might be inside the room?")		{
- 			input "insideMotionSensors", "capability.motionSensor", title: "Motion sensor(s) inside the room", required: false, multiple: true
- 			input "perimeterContactSensors", "capability.contactSensor", title: "Contact sensor(s) around the room", required: false, multiple: true
- 			input "outsideMotionSensors", "capability.motionSensor", title: "Motion sensor(s) outside the room", required: false, multiple: true
+		section("Which sensors will be used to detect if someone might be inside the room?") {
+        	sensorsInputs();
 		}
 		section("Turn on switches when someone might be inside the room?")		{
  			input "switches", "capability.switch", title: "Which switch(es)?", required: false, multiple: true
 		}
 		section("Time (in seconds) to revert back to Vacant when motion is not detected")		{
- 			input "reservationTimeOutInSeconds", "number", title: "Time out when room is Reserved", required: false, multiple: false, defaultValue: 90, range: "5..*"
- 			input "occupationTimeOutInSeconds", "number", title: "Time out when room is Occupied", required: false, multiple: false, defaultValue: 90, range: "5..*"
- 			input "engagementTimeOutInSeconds", "number", title: "Time out when room is Engaged", required: false, multiple: false, defaultValue: 90, range: "5..*"
+        	timeoutInputs()
 		}
 		section("Turn off switches when room is vacant?")		{
  			input "switches2", "capability.switch", title: "Which switch(es)?", required: false, multiple: true
@@ -80,8 +82,21 @@ def mainPage()	{
 	}
 }
 
+def sensorsInputs() {
+    input "insideMotionSensors", "capability.motionSensor", title: "Motion sensor(s) inside the room", required: false, multiple: true
+    input "perimeterContactSensors", "capability.contactSensor", title: "Contact sensor(s) around the room", required: false, multiple: true
+    input "outsideMotionSensors", "capability.motionSensor", title: "Motion sensor(s) outside the room", required: false, multiple: true
+}
+
+def timeoutInputs() {
+    input "reservationTimeOutInSeconds", "number", title: "Time out when room is Reserved", required: false, multiple: false, defaultValue: 3*60, range: "5..*"
+    input "occupationTimeOutInSeconds", "number", title: "Time out when room is Occupied", required: false, multiple: false, defaultValue: 60*60, range: "5..*"
+    input "engagementTimeOutInSeconds", "number", title: "Time out when room is Engaged", required: false, multiple: false, defaultValue: 12*60*60, range: "5..*"
+}
+
 def installed()		{
 	log.debug "Installed with settings: ${settings}"
+    app.updateLabel(settings.label)
     initialize()
 }
 
@@ -308,20 +323,12 @@ def uninstalled() {
 }
 
 def spawnChildDevice(roomName)	{
-	app.updateLabel(app.label)
-	if (!childCreated())
-    	log.debug "Spawning child device ..."
-		def child = addChildDevice("makutaku", "Room Occupancy", getRoomDeviceId(), null, [name: getRoomDeviceId(), label: roomName, completedSetup: true])
+	if (!childCreated()) {
+    	log.info "Spawning child device ..."
+		def device = addChildDevice("makutaku", "Room Occupancy", getRoomDeviceId(), null, [name: getRoomDeviceId(), label: roomName, completedSetup: true])
+		log.info "Child device created: name=${device.name} label=${device.label}"
+    }
 }
-
-private childCreated()		{
-	if (getChildDevice(getRoomDeviceId()))
-		return true
-	else
-		return false
-}
-
-private getRoomDeviceId()	{	return "rm_${app.id}"	}
 
 def handleSwitches(oldState = null, state = null)	{
 	if (state && oldState != state)	{
