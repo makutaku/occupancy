@@ -30,6 +30,7 @@ metadata {
 		capability "Actuator"
 		capability "Button"
 		capability "Sensor"
+        capability "Motion Sensor"
 		attribute "roomOccupancy", "string"
 		command "occupied"
         command "checking"
@@ -143,6 +144,11 @@ private updateRoomOccupancy(roomOccupancy = null) 	{
     def statusMsg = msgTextMap[currentValue] + "<datetime>"//+ formatLocalTime()
     
 	sendEvent(name: "status", value: statusMsg, isStateChange: true, displayed: false)
+
+    if (currentValue != "kaput") {
+        log.debug "Sending motion event"
+		sendEvent(name: "motion", value: (currentValue == "vacant") ? "inactive" : "active", isStateChange: true, displayed: false)
+    }
 }
 
 private formatLocalTime(format = "EEEE", time = now())		{
