@@ -70,14 +70,8 @@ def mainPage()	{
 		section("Which sensors will be used to detect if someone might be inside the room?") {
         	sensorsInputs();
 		}
-		section("Turn on switches when someone might be inside the room?")		{
- 			input "switches", "capability.switch", title: "Which switch(es)?", required: false, multiple: true
-		}
 		section("Revert back to Vacant when motion is not detected?")		{
         	timeoutInputs()
-		}
-		section("Turn off switches when room is vacant?")		{
- 			input "switches2", "capability.switch", title: "Which switch(es)?", required: false, multiple: true
 		}
 	}
 }
@@ -150,10 +144,6 @@ private setRoomState(state) {
     
     if (state != oldState) {
     	log.info "Changing room state: ${oldState} => ${state}"
-    	
-        if (oldState == 'vacant') {
-    		switchesOn()
-    	}
         roomDevice.generateEvent(state)
         updateTimeout()
     }
@@ -162,25 +152,21 @@ private setRoomState(state) {
 def makeRoomVacant()	{
 	log.debug "Making room vacant."
     setRoomState('vacant')
-	switchesOff()
 }
 
 def makeRoomReserved()	{
 	log.debug "Making room reserved."
     setRoomState('reserved')
-	switchesOn()
 }
 
 def makeRoomOccupied()	{
 	log.debug "Making room occupied."
     setRoomState('occupied')
-	switchesOn()
 }
 
 def makeRoomEngaged()	{
 	log.debug "Making room engaged."
     setRoomState('engaged')
-	switchesOn()
 }
 
 private outerPerimeterBreached() {
@@ -351,25 +337,10 @@ def spawnChildDevice(roomName)	{
     }
 }
 
-def handleSwitches(oldState = null, state = null)	{
+def handleRoomStateChange(oldState = null, state = null)	{
 	if (state && oldState != state)	{
-    	if (['reserved', 'occupied', 'engaged'].contains(state))
-			switchesOn()
-		else
-			if (state == 'vacant')
-				switchesOff()
 		return true
 	}
-    else
-    	return false
-}
 
-private switchesOn()	{
-	if (switches)
-		switches.on()
-}
-
-private switchesOff()	{
-	if (switches2)
-		switches2.off()
+	return false
 }
