@@ -30,7 +30,7 @@ metadata {
 		capability "Actuator"
 		capability "Button"
 		capability "Sensor"
-        capability "Motion Sensor"
+        capability "Presence Sensor"
 		attribute "roomOccupancy", "string"
 		command "occupied"
         command "checking"
@@ -146,8 +146,8 @@ private updateRoomOccupancy(roomOccupancy = null) 	{
 	sendEvent(name: "status", value: statusMsg, isStateChange: true, displayed: false)
 
     if (currentValue != "kaput") {
-        log.debug "Sending motion event"
-		sendEvent(name: "motion", value: (currentValue == "vacant") ? "inactive" : "active", isStateChange: true, displayed: false)
+        log.debug "Sending Presence Sensor event"
+		sendEvent(name: "presence", value: (currentValue == "vacant") ? "not present" : "present", isStateChange: true, displayed: false)
     }
 }
 
