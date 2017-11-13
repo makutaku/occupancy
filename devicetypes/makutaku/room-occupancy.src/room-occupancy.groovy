@@ -115,7 +115,7 @@ private	stateUpdate(state)	{
 	if (oldState != state)	{
 		updateRoomOccupancy(state)
         if (parent)
-        	parent.handleSwitches(oldState, state)
+        	parent.handleRoomStateChange(oldState, state)
 	}
 	resetTile(state)
 }
