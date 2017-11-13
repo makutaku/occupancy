@@ -173,21 +173,23 @@ private outerPerimeterBreached() {
 	if (outsideMotionSensors) {
     	return outsideMotionSensors.any{sensor -> sensor.currentValue("motion") == "active"}
     }
-	return True
+	return true
 }
 
 private innerPerimeterBreached() {
 	if (perimeterContactSensors) {
+    	log.debug "perimeterContactSensors not null"
     	return perimeterContactSensors.any{sensor -> sensor.currentValue("contact") == "open"}
     }
-	return True
+	log.debug "perimeterContactSensors null"
+    return true
 }
 
 private roomActive() {
 	if (insideMotionSensors) {
     	return insideMotionSensors.any{sensor -> sensor.currentValue("motion") == "active"}
     }
-	return False
+	return false
 }
 
 def getReservationTimeOutInSecondsAsInteger() {
