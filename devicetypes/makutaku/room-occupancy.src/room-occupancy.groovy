@@ -16,9 +16,14 @@
 *  If not, see <http://www.gnu.org/licenses/>.
 *
 *  Name: Room Occupancy
-*  Source: https://github.com/adey/bangali/blob/master/devicetypes/bangali/rooms-occupancy.src/rooms-occupancy.groovy
+*  Source: https://github.com/makutaku/occupancy/blob/master/devicetypes/makutaku/room-occupancy.src/room-occupancy.groovy
 *  Version: 0.01
+
+DONE:
+*	0) Forked from: https://github.com/adey/bangali/blob/master/devicetypes/bangali/rooms-occupancy.src/rooms-occupancy.groovy
 *
+*
+*  
 *
 *****************************************************************************************************************/
 
@@ -50,7 +55,7 @@ metadata {
 				attributeState "occupied", label: 'Occupied', icon:"st.Health & Wellness.health12", backgroundColor:"#90af89"
 				attributeState "checking", label: 'Checking', icon:"st.Health & Wellness.health9", backgroundColor:"#616969"
 				attributeState "vacant", label: 'Vacant', icon:"st.Home.home18", backgroundColor:"#6879af"
-				attributeState "engaged", label: 'Engaged', icon:"st.locks.lock.locked", backgroundColor:"#c079a3"
+                attributeState "engaged", label: 'Engaged', icon:"st.locks.lock.unlocked", backgroundColor:"#ff6666"
 				attributeState "reserved", label: 'Reserved', icon:"st.Office.office7", backgroundColor:"#b29600"
 				attributeState "kaput", label: 'Kaput', icon:"st.Outdoor.outdoor18", backgroundColor:"#8a5128"
             }
@@ -114,19 +119,28 @@ private	stateUpdate(state)	{
 	def oldState = device.currentValue('roomOccupancy')
 	if (oldState != state)	{
 		updateRoomOccupancy(state)
-        if (parent)
+        if (parent)	{
+        	log.info "Calling parent to handle state change: '${oldState}' => '${state}'"
         	parent.handleRoomStateChange(oldState, state)
+        }
 	}
 	resetTile(state)
 }
 
 private updateRoomOccupancy(roomOccupancy = null) 	{
 	roomOccupancy = roomOccupancy?.toLowerCase()
-    log.debug "Updating room occupancy to ${roomOccupancy} ..."
+    log.info "Updating room state to '${roomOccupancy}'."
 	
-    def msgTextMap = ['occupied':'Room is occupied: ', 'engaged':'Room is engaged: ', 'vacant':'Room is vacant: ', 'reserved':'Room is reserved: ', 'checking':'Checking room status: ', 'kaput':'Room not in service: ']
+    def msgTextMap = [
+    	'occupied':"${device.displayName} is occupied: ", 
+        'engaged':"${device.displayName} is engaged: ", 
+        'vacant':"${device.displayName} is vacant: ", 
+        'reserved':"${device.displayName} is reserved: ", 
+        'checking':"Checking ${device.displayName} status: ", 
+        'kaput':"${device.displayName} not in service: "
+        ]
 	if (!roomOccupancy || !(msgTextMap.containsKey(roomOccupancy))) {
-    	log.debug "${device.displayName}: Missing or invalid parameter room occupancy. Allowed values Occupied, Vacant, Engaged, Reserved or Checking."
+    	log.debug "${device.displayName}: Missing or invalid parameter 'roomOccupancy'. Allowed values occupied, vacant, engaged, reserved or checking."
         return
     }
     
@@ -141,7 +155,7 @@ private updateRoomOccupancy(roomOccupancy = null) 	{
     def currentValue = device.currentValue('roomOccupancy')
     log.debug "currentValue=${currentValue}"
     log.debug msgTextMap[currentValue]
-    def statusMsg = msgTextMap[currentValue] + "<datetime>"//+ formatLocalTime()
+    def statusMsg = msgTextMap[currentValue] + timeStamp()
     
 	sendEvent(name: "status", value: statusMsg, isStateChange: true, displayed: false)
 
@@ -151,10 +165,8 @@ private updateRoomOccupancy(roomOccupancy = null) 	{
     }
 }
 
-private formatLocalTime(format = "EEEE", time = now())		{
-	def formatter = new java.text.SimpleDateFormat(format)
-	formatter.setTimeZone(location.timeZone)
-	return formatter.format(time)
+private timeStamp()		{
+	return new Date().format('yyyy-MM-dd hh:mm:ss', location.timeZone)
 }
 
 private	resetTile(roomOccupancy)	{
