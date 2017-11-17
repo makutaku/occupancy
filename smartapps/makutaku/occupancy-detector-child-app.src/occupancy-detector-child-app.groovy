@@ -17,6 +17,8 @@
 *
 *  Version: 0.01
 *
+*  DONE:
+*  Forked from: https://github.com/adey/bangali/blob/master/smartapps/bangali/rooms-child-app.src/rooms-child-app.groovy
 *****************************************************************************************************************/
 
 definition	(
@@ -53,24 +55,22 @@ def mainPage()	{
 	dynamicPage(name: "mainPage", 
     	title: "Adding a room", 
         install: true, uninstall: childWasCreated)	{
-        
 		if (!childWasCreated)	{
 			section		{
 				label title: "Room name:", defaultValue: app.label, required: true
 			}
-    	} else {
+    	} else	{
 			section		{
 				paragraph "Room name:\n${app.label}"
 			}
 		}
-        
-		section("Update room state on away mode?")		{
+		section("Update room state on away mode?")	{
  			input "awayModes", "mode", title: "Away mode(s)?", required: false, multiple: true
 		}
-		section("Which sensors will be used to detect if someone might be inside the room?") {
+		section("Which sensors will be used to learn if someone might be present in the room?")	{
         	sensorsInputs();
 		}
-		section("Revert back to Vacant when motion is not detected?")		{
+		section("Revert room back to 'vacant' when motion is not detected?")	{
         	timeoutInputs()
 		}
 	}
@@ -78,14 +78,14 @@ def mainPage()	{
 
 def sensorsInputs() {
     input "insideMotionSensors", "capability.motionSensor", title: "Motion sensor(s) inside the room", required: false, multiple: true
-    input "perimeterContactSensors", "capability.contactSensor", title: "Contact sensor(s) around the room", required: false, multiple: true
+    input "perimeterContactSensors", "capability.contactSensor", title: "Contact sensor(s) used to access the room", required: false, multiple: true
     input "outsideMotionSensors", "capability.motionSensor", title: "Motion sensor(s) outside the room", required: false, multiple: true
 }
 
 def timeoutInputs() {
-    input "reservationTimeOutInSeconds", "number", title: "Time out when room is Reserved", required: false, multiple: false, defaultValue: 3*60, range: "5..*"
-    input "occupationTimeOutInSeconds", "number", title: "Time out when room is Occupied", required: false, multiple: false, defaultValue: 60*60, range: "5..*"
-    input "engagementTimeOutInSeconds", "number", title: "Time out when room is Engaged", required: false, multiple: false, defaultValue: 12*60*60, range: "5..*"
+    input "reservationTimeOutInSeconds", "number", title: "Time out when room is 'reserved'", required: false, multiple: false, defaultValue: 3*60, range: "5..*"
+    input "occupationTimeOutInSeconds", "number", title: "Time out when room is 'occupied'", required: false, multiple: false, defaultValue: 60*60, range: "5..*"
+    input "engagementTimeOutInSeconds", "number", title: "Time out when room is 'engaged'", required: false, multiple: false, defaultValue: 12*60*60, range: "5..*"
 }
 
 def installed()		{
@@ -137,15 +137,16 @@ private getRoomState() {
 private setRoomState(state) {
 	def roomDevice = getChildDevice(getRoomDeviceId())
     def oldState = roomDevice.getRoomState()
+    
     if (oldState == "kaput") {
-    	log.info "Not changing room state to ${state} because room is not in service"
+    	log.info "Not changing room state to '${state}' because room is not in service."
         return
     }
     
     if (state != oldState) {
-    	log.info "Changing room state: ${oldState} => ${state}"
+    	log.info "Requesting room state change: '${oldState}' => '${state}'"
         roomDevice.generateEvent(state)
-        updateTimeout()
+        updateTimeout(state)
     }
 }
 
@@ -178,10 +179,8 @@ private outerPerimeterBreached() {
 
 private innerPerimeterBreached() {
 	if (perimeterContactSensors) {
-    	log.debug "perimeterContactSensors not null"
     	return perimeterContactSensors.any{sensor -> sensor.currentValue("contact") == "open"}
     }
-	log.debug "perimeterContactSensors null"
     return true
 }
 
@@ -193,61 +192,65 @@ private roomActive() {
 }
 
 def getReservationTimeOutInSecondsAsInteger() {
-	if (reservationTimeOutInSeconds != null) {
-    	return reservationTimeOutInSeconds.toInteger()
-    }
-	return 30
+	return (reservationTimeOutInSeconds != null) ? reservationTimeOutInSeconds.toInteger() : 0
 }
 
 def getOccupationTimeOutInSecondsAsInteger() {
-	if (occupationTimeOutInSeconds != null) {
-    	return occupationTimeOutInSeconds.toInteger()
-    }
-	return 30
+	return (occupationTimeOutInSeconds != null) ? occupationTimeOutInSeconds.toInteger() : 0
 }
 
 def getEngagementTimeOutInSecondsAsInteger() {
-	if (engagementTimeOutInSeconds != null) {
-    	return engagementTimeOutInSeconds.toInteger()
-    }
-	return 30
+	return (engagementTimeOutInSeconds != null) ? engagementTimeOutInSeconds.toInteger() : 0
 }
 
-def updateTimeout()	{
-	log.debug "Checking room activation ..."
+def updateTimeout(roomState = null)	{
+    def timeoutInSeconds = 0
+        
     if (!roomActive()) {
-    	log.debug "room is not active"
-        def roomState = getRoomState()
-        log.debug "roomState=${roomState}"
-    
-    	def timeOutInSec = 0
-    
+        if (!roomState)
+            roomState = getRoomState()
+            
+        log.debug "Updating timeout for state '${roomState}'"
+
         switch (roomState) {
-        	case "reserved":
-                timeOutInSec = getReservationTimeOutInSecondsAsInteger()
-            	break;
-        	case "occupied":
-                timeOutInSec = getOccupationTimeOutInSecondsAsInteger()
-            	break;
+            case "reserved":
+                timeoutInSeconds = getReservationTimeOutInSecondsAsInteger()
+                break;
+            case "occupied":
+                timeoutInSeconds = getOccupationTimeOutInSecondsAsInteger()
+                break;
             case "engaged":
-                timeOutInSec = getEngagementTimeOutInSecondsAsInteger()
+                timeoutInSeconds = getEngagementTimeOutInSecondsAsInteger()
                 break;
         }
-        
-        if (timeOutInSec > 0) {
-        	log.debug "Resetting time out to ${timeOutInSec} seconds"
-        	runIn(timeOutInSec, makeRoomVacant)
-        }
+    }
+
+    if (timeoutInSeconds > 0) {
+		scheduleTimeout(timeoutInSeconds)
     }
     else {
-    	log.debug "room is still active"
+        cancelTimeout()
     }
+}
+
+def scheduleTimeout(timeoutInSeconds)	{
+    log.debug "Scheduling timeout to ${timeoutInSeconds} seconds."
+	runIn(timeoutInSeconds, timeoutExpired)
+}
+
+def cancelTimeout() {
+	log.debug "Cancelling timeout."
+    unschedule()
+}
+
+def timeoutExpired() {
+	log.info "Timeout has expired."
+    makeRoomVacant()
 }
 
 def	insideMotionActiveEventHandler(evt)	{
 	log.debug "inside motion: active"
-	log.debug "Cancelled time out"
-    unschedule()   
+    cancelTimeout()
 
 	if (innerPerimeterBreached()) {
     	if (outerPerimeterBreached())
@@ -267,7 +270,7 @@ def	insideMotionInactiveEventHandler(evt)	{
 
 def	perimeterContactOpenEventHandler(evt)	{
 	log.debug "perimeter contact: open"
-	log.debug "inner perimeter has been breached"
+	log.info "inner perimeter has been breached"
     if (outerPerimeterBreached())
     	makeRoomReserved()
     else 
@@ -282,13 +285,13 @@ def	perimeterContactClosedEventHandler(evt)	{
     	log.debug "inner perimeter is still breached"
     } 
     else  {
-    	log.debug "inner perimeter is restored"
+    	log.info "inner perimeter is restored"
     }
 }
 
 def	outsideMotionActiveEventHandler(evt)	{
 	log.debug "outside motion: active"
- 	log.debug "outer perimeter has been breached"
+ 	log.info "outer perimeter has been breached"
     
     def state = getRoomState()
     if (state == "occupied") {
@@ -305,7 +308,7 @@ def	outsideMotionInactiveEventHandler(evt)	{
         return
     } 
     else  {
-    	log.debug "outer perimeter is restored"
+    	log.info "outer perimeter is restored"
     }
     
     if (getRoomState() == "engaged" || !roomActive()) {
@@ -333,16 +336,17 @@ def uninstalled() {
 
 def spawnChildDevice(roomName)	{
 	if (!childCreated()) {
-    	log.info "Spawning child device ..."
+    	log.debug "Spawning child device."
 		def device = addChildDevice("makutaku", "Room Occupancy", getRoomDeviceId(), null, [name: getRoomDeviceId(), label: roomName, completedSetup: true])
 		log.info "Child device created: name=${device.name} label=${device.label}"
     }
 }
 
 def handleRoomStateChange(oldState = null, state = null)	{
+	log.info "Room has changed state: '${oldState}' => '${state}'"
 	if (state && oldState != state)	{
+    	updateTimeout(state)
 		return true
 	}
-
 	return false
 }

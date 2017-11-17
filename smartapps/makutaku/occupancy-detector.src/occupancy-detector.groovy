@@ -19,13 +19,15 @@
 *  Source: https://github.com/adey/bangali/blob/master/smartapps/bangali/rooms-manager.src/rooms-manager.groovy
 *  Version: 0.01
 *
+*  DONE:   
+*  0) Forked from https://github.com/adey/bangali/blob/master/smartapps/bangali/rooms-manager.src/rooms-manager.groovy
 *****************************************************************************************************************/
 
 definition (
     name: "Occupancy Detector",
     namespace: "makutaku",
     author: "makutaku",
-    description: "Detect if someone might be using a room, even when the person stops moving inside.",
+    description: "Detect if someone might be present in a room, even after movement stops. An occupance device will be created for each configured room, and its state will change depending on the probability the room is occupied.",
     category: "My Apps",
     singleInstance: true,
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
