@@ -86,6 +86,7 @@ def timeoutInputs() {
     input "reservationTimeOutInSeconds", "number", title: "Time out when room is 'reserved'", required: false, multiple: false, defaultValue: 3*60, range: "5..*"
     input "occupationTimeOutInSeconds", "number", title: "Time out when room is 'occupied'", required: false, multiple: false, defaultValue: 60*60, range: "5..*"
     input "engagementTimeOutInSeconds", "number", title: "Time out when room is 'engaged'", required: false, multiple: false, defaultValue: 12*60*60, range: "5..*"
+    input "outerPerimeterRestorationDelayInSeconds", "number", title: "Outside motion sensor delay'", required: false, multiple: false, defaultValue: 30, range: "0..*"
 }
 
 def installed()		{
@@ -240,7 +241,7 @@ def scheduleTimeout(timeoutInSeconds)	{
 
 def cancelTimeout() {
 	log.debug "Cancelling timeout."
-    unschedule()
+    unschedule(timeoutExpired)
 }
 
 def timeoutExpired() {
@@ -292,7 +293,7 @@ def	perimeterContactClosedEventHandler(evt)	{
 def	outsideMotionActiveEventHandler(evt)	{
 	log.debug "outside motion: active"
  	log.info "outer perimeter has been breached"
-    
+    unschedule(onOutsidePerimeterRestored)
     def state = getRoomState()
     if (state == "occupied") {
     	makeRoomReserved()
@@ -316,6 +317,12 @@ def	outsideMotionInactiveEventHandler(evt)	{
     	return
     }
 
+	log.debug "Scheduling outsidePerimeterRestorationHandler to run in ${outerPerimeterRestorationDelayInSeconds} seconds."
+	runIn(outerPerimeterRestorationDelayInSeconds, onOutsidePerimeterRestored)
+}
+
+def outsidePerimeterRestorationHandler() {
+	log.debug "Running outsidePerimeterRestorationHandler."
     if (innerPerimeterBreached()) 
     	makeRoomOccupied()
     else 
