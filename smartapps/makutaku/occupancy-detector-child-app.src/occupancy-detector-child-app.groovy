@@ -15,7 +15,7 @@
  *  You should have received a copy of the GNU General Public License along with this program.
  *  If not, see <http://www.gnu.org/licenses/>.
  *
- *  Version: 0.01
+ *  Version: 0.02
  *
  *  DONE:
  *  Forked from: https://github.com/adey/bangali/blob/master/smartapps/bangali/rooms-child-app.src/rooms-child-app.groovy
@@ -154,29 +154,22 @@ private getRoomState() {
     return state
 }
 
-private setRoomState(requestedState = null) {
+private setRoomState(requestedState) {
     def roomDevice = getChildDevice(getRoomDeviceId())
     def currentState = roomDevice.getRoomState()
-    requestedState = requestedState ? requestedState : currentState
 
     if (currentState == "kaput") {
         log.info "Not changing room state to '${requestedState}' because room is not in service."
-        return
+        return false
     }
 
-    //def innerRoomsMaxState = innerRoomsMaxState()
-    //log.debug "Requested room state is ${requestedState}, and maximum inner room state is ${innerRoomsMaxState}"
-
-    def nextState = requestedState //greaterState(innerRoomsMaxState, requestedState)
-    if (nextState != requestedState) {
-        log.debug "Overriding requested state from ${requestedState} to ${nextState} because of inner room."
+    if (requestedState != currentState) {
+        log.info "Requesting room state change: '${currentState}' => '${requestedState}'"
+        roomDevice.generateEvent(requestedState)
+        return true
     }
-
-    if (nextState != currentState) {
-        log.info "Requesting room state change: '${currentState}' => '${nextState}'"
-        roomDevice.generateEvent(nextState)
-        updateTimeout(nextState)
-    }
+    
+    return false
 }
 
 def makeRoomVacant() {
@@ -211,7 +204,7 @@ def innerRoomsMaxState() {
 }
 
 def greaterState(state1, state2) {
-    def stateValue = ['vacant', 'reserved', 'occupied', 'engaged']
+    def stateValue = ['kaput', 'vacant', 'reserved', 'occupied', 'engaged']
     return stateValue.indexOf(state1) > stateValue.indexOf(state2) ? state1 : state2
 }
 
@@ -238,7 +231,7 @@ private isRoomActive() {
 
     if (!active) {
         def roomsMaxState = innerRoomsMaxState()
-        active = (roomsMaxState != 'vacant')
+        active = (roomsMaxState != 'vacant' && roomsMaxState != 'kaput')
     }
 
     return active
@@ -256,38 +249,26 @@ def getEngagementTimeOutInSecondsAsInteger() {
     return (engagementTimeOutInSeconds != null) ? engagementTimeOutInSeconds.toInteger() : 0
 }
 
-def updateTimeout(roomState = null, roomActive = null) {
-    roomActive = roomActive ?: isRoomActive()
+def scheduleTimeout(roomState = null) {
     def timeoutInSeconds = 0
+    roomState = roomState ?: getRoomState()
 
-    if (!roomActive) {
-        roomState = roomState ?: getRoomState()
-
-        log.debug "Updating timeout for state '${roomState}'"
-
-        switch (roomState) {
-            case "reserved":
-                timeoutInSeconds = getReservationTimeOutInSecondsAsInteger()
-                break;
-            case "occupied":
-                timeoutInSeconds = getOccupationTimeOutInSecondsAsInteger()
-                break;
-            case "engaged":
-                timeoutInSeconds = getEngagementTimeOutInSecondsAsInteger()
-                break;
-        }
+    switch (roomState) {
+        case "reserved":
+        timeoutInSeconds = getReservationTimeOutInSecondsAsInteger()
+        break;
+        case "occupied":
+        timeoutInSeconds = getOccupationTimeOutInSecondsAsInteger()
+        break;
+        case "engaged":
+        timeoutInSeconds = getEngagementTimeOutInSecondsAsInteger()
+        break;
     }
 
     if (timeoutInSeconds > 0) {
-        scheduleTimeout(timeoutInSeconds)
-    } else {
-        cancelTimeout()
+        log.debug "Scheduling timeout for state '${roomState}' to ${timeoutInSeconds} seconds."
+    	runIn(timeoutInSeconds, timeoutExpired)
     }
-}
-
-def scheduleTimeout(timeoutInSeconds) {
-    log.debug "Scheduling timeout to ${timeoutInSeconds} seconds."
-    runIn(timeoutInSeconds, timeoutExpired)
 }
 
 def cancelTimeout() {
@@ -303,11 +284,11 @@ def timeoutExpired() {
 def innerRoomsEventHandler(evt) {
     def roomDevice = getChildDevice(getRoomDeviceId())
     def latestvalue = roomDevice.latestValue('roomOccupancy')
-    log.debug "${evt.displayName} has changed from ${latestvalue} to ${evt.value}"
+    log.debug "Inside: ${evt.displayName} has changed from ${latestvalue} to ${evt.value}"
 }
 
 def insideMotionActiveEventHandler(evt) {
-    log.debug "inside motion: active"
+    log.debug "Inside: ${evt.displayName} has changed to ${evt.value}"
     cancelTimeout()
 
     if (isInnerPerimeterBreached()) {
@@ -321,42 +302,56 @@ def insideMotionActiveEventHandler(evt) {
 }
 
 def insideMotionInactiveEventHandler(evt) {
-    log.debug "inside motion: inactive"
-    updateTimeout()
+    log.debug "Inside: ${evt.displayName} has changed to ${evt.value}"
+    if (isRoomActive()) {
+	    log.info "Inside motion still active."
+    }
+    else {
+    	log.info "Inside motion is now inactive."
+    	scheduleTimeout()
+    }
 }
 
 def perimeterContactOpenEventHandler(evt) {
-    log.debug "perimeter contact: open"
-    log.info "inner perimeter has been breached"
+	log.debug "Inner perimeter: ${evt.displayName} has changed to ${evt.value}"
+    log.info "Inner perimeter has been breached"
     if (isOuterPerimeterBreached())
         makeRoomReserved()
     else
         makeRoomOccupied()
+        
+    if (!isRoomActive()) {
+    	log.info "Inside motion was inactive when inner perimeter breached."
+    	scheduleTimeout()
+    }
 }
 
 def perimeterContactClosedEventHandler(evt) {
-    log.debug "perimeter contact: closed"
+	log.debug "Inner perimeter:${evt.displayName} has changed to ${evt.value}"
     log.debug(isInnerPerimeterBreached() ?
-            "inner perimeter is still breached"
-            : "inner perimeter is restored")
+            "Inner perimeter is still breached"
+            : "Inner perimeter is restored")
 }
 
 def outsideMotionActiveEventHandler(evt) {
-    log.debug "outside motion: active"
-    log.info "outer perimeter has been breached"
+    log.debug "Outer perimeter: ${evt.displayName} has changed to ${evt.value}"
+    log.info "Outer perimeter:  has been breached"
     unschedule(onOutsidePerimeterRestored)
     def state = getRoomState()
     if (state == "occupied") {
         makeRoomReserved()
+     	if (!isRoomActive()) {
+    		scheduleTimeout()
+    	}
     }
 }
 
 def outsideMotionInactiveEventHandler(evt) {
-    log.debug "outside motion: inactive"
+    log.debug "Outer perimeter: ${evt.displayName} has changed to ${evt.value}"
 
     def outerPerimeterBreached = isOuterPerimeterBreached()
     if (outerPerimeterBreached) {
-        log.debug "outer perimeter is still breached"
+        log.debug "Outer perimeter is still breached"
         return
     }
 
@@ -364,7 +359,7 @@ def outsideMotionInactiveEventHandler(evt) {
 }
 
 def outsidePerimeterRestorationHandler() {
-    log.info "outer perimeter is restored"
+    log.info "Outer perimeter is restored"
 
     if (getRoomState() == "engaged" || !isRoomActive()) {
         //nothing to do
@@ -375,6 +370,10 @@ def outsidePerimeterRestorationHandler() {
         makeRoomOccupied()
     else
         makeRoomEngaged()
+        
+    if (!isRoomActive()) {
+        scheduleTimeout()
+    }
 }
 
 def modeEventHandler(evt) {
@@ -395,7 +394,7 @@ def spawnChildDevice(roomName) {
 def handleRoomStateChange(oldState = null, state = null) {
     log.info "Room has changed state: '${oldState}' => '${state}'"
     if (state && oldState != state) {
-        updateTimeout(state)
+        scheduleTimeout(state)
         return true
     }
     return false
