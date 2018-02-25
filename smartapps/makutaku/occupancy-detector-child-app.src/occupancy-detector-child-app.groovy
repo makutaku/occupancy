@@ -68,7 +68,7 @@ def mainPage() {
             input "awayModes", "mode", title: "Away mode(s)?", required: false, multiple: true
         }
         section("Which sensors will be used to learn if someone might be present in the room?") {
-            sensorsInputs();
+            sensorsInputs()
         }
         section("Revert room back to 'vacant' when motion is not detected?") {
             timeoutInputs()
@@ -76,6 +76,12 @@ def mainPage() {
         section("Does this room contains other rooms?") {
             innerRoomInputs()
         }
+        section("Send Notifications?") {
+        	input("recipients", "contact", title: "Send notifications to", required: false) {
+            	input "phone", "phone", title: "Warn with text message (optional)",
+                	description: "Phone Number", required: false
+        	}
+    	}
     }
 }
 
@@ -97,9 +103,9 @@ def innerRoomInputs() {
 }
 
 def installed() {
-    log.debug "Installed app ${app.label} with settings: ${settings}"
-    log.debug "app label: ${app.label}"
-    log.debug "app name: ${app.name}"
+    logDebug("Installed app ${app.label} with settings: ${settings}")
+    logDebug("app label: ${app.label}")
+    logDebug("app name: ${app.name}")
 }
 
 def uninstalled() {
@@ -109,15 +115,15 @@ def uninstalled() {
 }
 
 def updated() {
-    log.debug "Updated app ${app.label} with settings: ${settings}"
-    log.debug "app label: ${app.label}"
-    log.debug "app name: ${app.name}"
+    logDebug("Updated app ${app.label} with settings: ${settings}")
+    logDebug("app label: ${app.label}")
+    logDebug("app name: ${app.name}")
     unschedule()
     initialize()
 }
 
 def initialize() {
-    log.debug "Initializing app ${app.label} ..."
+    logDebug("Initializing app ${app.label} ...")
     if (!childCreated()) {
         spawnChildDevice(app.label)
     }
@@ -125,27 +131,49 @@ def initialize() {
         subscribe(location, modeEventHandler)
     }
     if (insideMotionSensors) {
-        log.debug "Subscribing to inside motion sensors ..."
+        logDebug("Subscribing to inside motion sensors ...")
         subscribe(insideMotionSensors, "motion.active", insideMotionActiveEventHandler)
         subscribe(insideMotionSensors, "motion.inactive", insideMotionInactiveEventHandler)
     }
     if (perimeterContactSensors) {
-        log.debug "Subscribing to perimeter contact sensors ..."
+        logDebug("Subscribing to perimeter contact sensors ...")
         subscribe(perimeterContactSensors, "contact.open", perimeterContactOpenEventHandler)
         subscribe(perimeterContactSensors, "contact.closed", perimeterContactClosedEventHandler)
     }
     if (outsideMotionSensors) {
-        log.debug "Subscribing to outside motion sensors ..."
+        logDebug("Subscribing to outside motion sensors ...")
         subscribe(outsideMotionSensors, "motion.active", outsideMotionActiveEventHandler)
         subscribe(outsideMotionSensors, "motion.inactive", outsideMotionInactiveEventHandler)
     }
     if (innerRooms) {
-        log.debug "Subscribing to inner rooms ..."
+        logDebug("Subscribing to inner rooms ...")
         subscribe(innerRooms, "roomOccupancy", innerRoomsEventHandler)
         subscribe(innerRooms, "motion.active", insideMotionActiveEventHandler)
         subscribe(innerRooms, "motion.inactive", insideMotionInactiveEventHandler)
     }
-    log.debug "initialization done."
+    logDebug("Initialization done.")
+}
+
+private sendNotification(message) {
+    if (location.contactBookEnabled && recipients) {
+        sendNotificationToContacts(message, recipients)
+    } else {
+        if (phone) {
+            sendSms(phone, message)
+        }
+    }
+}
+
+private logDebug(message) {
+	message = "${app.label}: " + message
+	log.debug message
+    //sendNotification message
+}
+
+private logInfo(message) {
+	message = "${app.label}: " + message
+	log.info message
+    //sendNotification message
 }
 
 private getRoomState() {
@@ -159,12 +187,12 @@ private setRoomState(requestedState) {
     def currentState = roomDevice.getRoomState()
 
     if (currentState == "kaput") {
-        log.info "Not changing room state to '${requestedState}' because room is not in service."
+        logInfo("Not changing room state to '${requestedState}' because room is not in service.")
         return false
     }
 
     if (requestedState != currentState) {
-        log.info "Requesting room state change: '${currentState}' => '${requestedState}'"
+        logInfo("Requesting room state change: '${currentState}' => '${requestedState}'")
         roomDevice.generateEvent(requestedState)
         return true
     }
@@ -173,27 +201,27 @@ private setRoomState(requestedState) {
 }
 
 def makeRoomVacant() {
-    log.debug "Making room vacant."
+    logDebug("Making room vacant.")
     setRoomState('vacant')
 }
 
 def makeRoomReserved() {
-    log.debug "Making room reserved."
+    logDebug("Making room reserved.")
     setRoomState('reserved')
 }
 
 def makeRoomOccupied() {
-    log.debug "Making room occupied."
+    logDebug("Making room occupied.")
     setRoomState('occupied')
 }
 
 def makeRoomEngaged() {
-    log.debug "Making room engaged."
+    logDebug("Making room engaged.")
     setRoomState('engaged')
 }
 
 def innerRoomsMaxState() {
-    def maxState = "vacant"
+    def maxState = "kaput"
     if (innerRooms) {
         innerRooms.each { dev ->
             def state = dev.currentValue('roomOccupancy')
@@ -231,7 +259,7 @@ private isRoomActive() {
 
     if (!active) {
         def roomsMaxState = innerRoomsMaxState()
-        active = (roomsMaxState != 'vacant' && roomsMaxState != 'kaput')
+        active = (roomsMaxState != 'vacant') && (roomsMaxState != 'kaput')
     }
 
     return active
@@ -266,29 +294,29 @@ def scheduleTimeout(roomState = null) {
     }
 
     if (timeoutInSeconds > 0) {
-        log.debug "Scheduling timeout for state '${roomState}' to ${timeoutInSeconds} seconds."
+        logDebug("Scheduling timeout for state '${roomState}' to ${timeoutInSeconds} seconds.")
     	runIn(timeoutInSeconds, timeoutExpired)
     }
 }
 
 def cancelTimeout() {
-    log.debug "Cancelling timeout."
+    logDebug("Cancelling timeout.")
     unschedule(timeoutExpired)
 }
 
 def timeoutExpired() {
-    log.info "Timeout has expired."
+    logInfo("Timeout has expired.")
     makeRoomVacant()
 }
 
 def innerRoomsEventHandler(evt) {
     def roomDevice = getChildDevice(getRoomDeviceId())
     def latestvalue = roomDevice.latestValue('roomOccupancy')
-    log.debug "Inside: ${evt.displayName} has changed from ${latestvalue} to ${evt.value}"
+    logDebug("Inside: ${evt.displayName} has changed from ${latestvalue} to ${evt.value}")
 }
 
 def insideMotionActiveEventHandler(evt) {
-    log.debug "Inside: ${evt.displayName} has changed to ${evt.value}"
+    logDebug("Inside: ${evt.displayName} has changed to ${evt.value}")
     cancelTimeout()
 
     if (isInnerPerimeterBreached()) {
@@ -302,41 +330,41 @@ def insideMotionActiveEventHandler(evt) {
 }
 
 def insideMotionInactiveEventHandler(evt) {
-    log.debug "Inside: ${evt.displayName} has changed to ${evt.value}"
+    logDebug("Inside: ${evt.displayName} has changed to ${evt.value}")
     if (isRoomActive()) {
-	    log.info "Inside motion still active."
+	    logInfo("Inside motion still active.")
     }
     else {
-    	log.info "Inside motion is now inactive."
+    	logInfo("Inside motion is now inactive.")
     	scheduleTimeout()
     }
 }
 
 def perimeterContactOpenEventHandler(evt) {
-	log.debug "Inner perimeter: ${evt.displayName} has changed to ${evt.value}"
-    log.info "Inner perimeter has been breached"
+	logDebug("Inner perimeter: ${evt.displayName} has changed to ${evt.value}")
+    logInfo("Inner perimeter has been breached")
     if (isOuterPerimeterBreached())
         makeRoomReserved()
     else
         makeRoomOccupied()
         
     if (!isRoomActive()) {
-    	log.info "Inside motion was inactive when inner perimeter breached."
+    	logInfo("Inside motion was inactive when inner perimeter breached.")
     	scheduleTimeout()
     }
 }
 
 def perimeterContactClosedEventHandler(evt) {
-	log.debug "Inner perimeter:${evt.displayName} has changed to ${evt.value}"
-    log.debug(isInnerPerimeterBreached() ?
+	logDebug("Inner perimeter:${evt.displayName} has changed to ${evt.value}")
+    logDebug(isInnerPerimeterBreached() ?
             "Inner perimeter is still breached"
             : "Inner perimeter is restored")
 }
 
 def outsideMotionActiveEventHandler(evt) {
-    log.debug "Outer perimeter: ${evt.displayName} has changed to ${evt.value}"
-    log.info "Outer perimeter:  has been breached"
-    unschedule(onOutsidePerimeterRestored)
+    logDebug("Outer perimeter: ${evt.displayName} has changed to ${evt.value}")
+    logInfo("Outer perimeter:  has been breached")
+    unschedule(outsidePerimeterRestorationHandler)
     def state = getRoomState()
     if (state == "occupied") {
         makeRoomReserved()
@@ -347,11 +375,11 @@ def outsideMotionActiveEventHandler(evt) {
 }
 
 def outsideMotionInactiveEventHandler(evt) {
-    log.debug "Outer perimeter: ${evt.displayName} has changed to ${evt.value}"
+    logDebug("Outer perimeter: ${evt.displayName} has changed to ${evt.value}")
 
     def outerPerimeterBreached = isOuterPerimeterBreached()
     if (outerPerimeterBreached) {
-        log.debug "Outer perimeter is still breached"
+        logDebug("Outer perimeter is still breached")
         return
     }
 
@@ -359,7 +387,7 @@ def outsideMotionInactiveEventHandler(evt) {
 }
 
 def outsidePerimeterRestorationHandler() {
-    log.info "Outer perimeter is restored"
+    logInfo("Outer perimeter is restored")
 
     if (getRoomState() == "engaged" || !isRoomActive()) {
         //nothing to do
@@ -384,15 +412,15 @@ def modeEventHandler(evt) {
 
 def spawnChildDevice(roomName) {
     if (!childCreated()) {
-        log.debug "Spawning child device."
+        logDebug("Spawning child device.")
         def device = addChildDevice("makutaku", "Room Occupancy", getRoomDeviceId(), null,
                 [name: getRoomDeviceId(), label: roomName, completedSetup: true])
-        log.info "Child device created: name=${device.name} label=${device.label}"
+        logInfo("Child device created: name=${device.name} label=${device.label}")
     }
 }
 
 def handleRoomStateChange(oldState = null, state = null) {
-    log.info "Room has changed state: '${oldState}' => '${state}'"
+    logInfo("Room has changed state: '${oldState}' => '${state}'")
     if (state && oldState != state) {
         scheduleTimeout(state)
         return true
