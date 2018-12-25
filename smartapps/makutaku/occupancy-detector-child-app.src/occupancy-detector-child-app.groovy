@@ -119,6 +119,7 @@ def updated() {
     logDebug("app label: ${app.label}")
     logDebug("app name: ${app.name}")
     unschedule()
+	unsubscribe()
     initialize()
 }
 
@@ -127,6 +128,7 @@ def initialize() {
     if (!childCreated()) {
         spawnChildDevice(app.label)
     }
+    
     if (awayModes) {
         subscribe(location, modeEventHandler)
     }
@@ -394,10 +396,13 @@ def outsidePerimeterRestorationHandler() {
         return
     }
 
-    if (isInnerPerimeterBreached())
+    if (isInnerPerimeterBreached()) {
+ 		logDebug("Making room occupied because outer perimeter has been restored while inner perimeter is still breached.")
         makeRoomOccupied()
-    else
+    } else {
+    	logDebug("Making room engaged because outer perimeter has been restored while inner perimeter is not breached.")
         makeRoomEngaged()
+    }
         
     if (!isRoomActive()) {
         scheduleTimeout()
